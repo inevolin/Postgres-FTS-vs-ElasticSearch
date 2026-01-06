@@ -1,0 +1,165 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+
+data:
+  POSTGRES_DB: benchmark_db
+  POSTGRES_USER: benchmark_user
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: benchmark_password_123
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:18
+        args:
+          - "-c"
+          - "shared_buffers=3GB"
+          - "-c"
+          - "effective_cache_size=6GB"
+          - "-c"
+          - "work_mem=64MB"
+          - "-c"
+          - "maintenance_work_mem=1GB"
+          - "-c"
+          - "max_worker_processes=76"
+          - "-c"
+          - "max_parallel_workers=64"
+          - "-c"
+          - "max_parallel_workers_per_gather=4"
+          - "-c"
+          - "max_connections=300"
+          - "-c"
+          - "max_parallel_maintenance_workers=8"
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql18/data
+        - name: benchmark-data
+          mountPath: /data
+          readOnly: true
+        - name: benchmark-scripts
+          mountPath: /scripts
+        - name: benchmark-config
+          mountPath: /config
+          readOnly: true
+        - name: benchmark-results
+          mountPath: /results
+        resources:
+          requests:
+            memory: "MEMORY_REQUEST_PLACEHOLDER"
+            cpu: "CPU_REQUEST_PLACEHOLDER"
+          limits:
+            memory: "MEMORY_LIMIT_PLACEHOLDER"
+            cpu: "CPU_LIMIT_PLACEHOLDER"
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - benchmark_user
+            - -d
+            - postgres
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - benchmark_user
+            - -d
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: benchmark-data
+        hostPath:
+          path: DATA_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-scripts
+        hostPath:
+          path: SCRIPT_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-config
+        hostPath:
+          path: CONFIG_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-results
+        hostPath:
+          path: RESULTS_PATH_PLACEHOLDER
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: postgres

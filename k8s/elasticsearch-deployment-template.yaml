@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  
+data:
+  discovery.type: single-node
+  ES_JAVA_OPTS: "JVM_OPTS_PLACEHOLDER"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-pvc
+  
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  
+  labels:
+    app: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        ports:
+        - containerPort: 9200
+          name: http
+        - containerPort: 9300
+          name: transport
+        env:
+        - name: discovery.type
+          value: "single-node"
+        - name: ES_JAVA_OPTS
+          value: "JVM_OPTS_PLACEHOLDER"
+        - name: xpack.security.enabled
+          value: "false"
+        - name: xpack.security.http.ssl.enabled
+          value: "false"
+        volumeMounts:
+        - name: elasticsearch-storage
+          mountPath: /usr/share/elasticsearch/data
+        - name: benchmark-data
+          mountPath: /data
+          readOnly: true
+        - name: benchmark-scripts
+          mountPath: /scripts
+        - name: benchmark-config
+          mountPath: /config
+          readOnly: true
+        resources:
+          requests:
+            memory: "MEMORY_REQUEST_PLACEHOLDER"
+            cpu: "CPU_REQUEST_PLACEHOLDER"
+          limits:
+            memory: "MEMORY_LIMIT_PLACEHOLDER"
+            cpu: "CPU_LIMIT_PLACEHOLDER"
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 20
+      volumes:
+      - name: elasticsearch-storage
+        persistentVolumeClaim:
+          claimName: elasticsearch-pvc
+      - name: benchmark-data
+        hostPath:
+          path: DATA_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-scripts
+        hostPath:
+          path: SCRIPT_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-config
+        hostPath:
+          path: CONFIG_PATH_PLACEHOLDER
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  
+  labels:
+    app: elasticsearch
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9200
+    targetPort: 9200
+    protocol: TCP
+    name: http
+  - port: 9300
+    targetPort: 9300
+    protocol: TCP
+    name: transport
+  selector:
+    app: elasticsearch

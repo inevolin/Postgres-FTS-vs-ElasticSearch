@@ -1,0 +1,22 @@
+Query: WITH q AS (SELECT websearch_to_tsquery('english', %s) AS query) SELECT id, title FROM documents, q WHERE documents.content_tsv @@ q.query ORDER BY ts_rank_cd(documents.content_tsv, q.query) DESC LIMIT %s;
+Params: ('global OR initiative', 20)
+
+EXPLAIN ANALYZE Output:
+Limit  (cost=28633.77..28633.82 rows=20 width=72) (actual time=135.360..135.363 rows=20.00 loops=1)
+  Buffers: shared hit=31648 read=2077
+  ->  Sort  (cost=28633.77..28655.41 rows=8658 width=72) (actual time=135.359..135.360 rows=20.00 loops=1)
+        Sort Key: (ts_rank_cd(documents.content_tsv, '''global'' | ''initi'''::tsquery)) DESC
+        Sort Method: top-N heapsort  Memory: 27kB
+        Buffers: shared hit=31648 read=2077
+        ->  Bitmap Heap Scan on documents  (cost=104.89..28403.38 rows=8658 width=72) (actual time=5.208..133.367 rows=8331.00 loops=1)
+              Recheck Cond: (content_tsv @@ '''global'' | ''initi'''::tsquery)
+              Heap Blocks: exact=8172
+              Buffers: shared hit=31648 read=2077
+              ->  Bitmap Index Scan on documents_fts_gin_idx  (cost=0.00..102.73 rows=8658 width=0) (actual time=4.100..4.100 rows=8331.00 loops=1)
+                    Index Cond: (content_tsv @@ '''global'' | ''initi'''::tsquery)
+                    Index Searches: 1
+                    Buffers: shared hit=12
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.071 ms
+Execution Time: 135.505 ms

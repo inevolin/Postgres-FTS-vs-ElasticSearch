@@ -1,0 +1,54 @@
+# Performance Comparison Summary
+
+Startup Times:
+  Postgres: 13.47s
+  Elasticsearch: 12.80s
+
+Data Loading & Indexing Times:
+  Postgres: 206.67s
+  Elasticsearch: 309.22s
+
+Database Sizes:
+  Postgres: 3436.52 MB
+  Elasticsearch: 1591.98 MB
+
+Peak Resource Usage:
+  Postgres: 4.12 Cores, 4160.51 MiB
+  Elasticsearch: 4.06 Cores, 5528.58 MiB
+
+Query 1: Simple
+  Postgres: 0.0234s (379.62 TPS)
+  Elasticsearch: 0.0108s (895.44 TPS)
+
+Query 2: Phrases
+  Postgres: 0.0011s (7087.54 TPS)
+  Elasticsearch: 0.0066s (1469.65 TPS)
+
+Query 3: Complex
+  Postgres: 0.0704s (132.27 TPS)
+  Elasticsearch: 0.0104s (917.55 TPS)
+
+Query 4: Top-N
+  Postgres: 0.0254s (372.94 TPS)
+  Elasticsearch: 0.0117s (820.88 TPS)
+
+Query 5: Boolean
+  Postgres: 0.0007s (13321.45 TPS)
+  Elasticsearch: 0.0072s (1339.94 TPS)
+
+Query 6: JOINs
+  Postgres: 0.0010s (9085.38 TPS)
+  Elasticsearch: 0.0349s (279.00 TPS)
+
+Total Query Duration:
+  Postgres: 13.2020s
+  Elasticsearch: 8.4358s
+
+Total Workflow Duration (Setup + Ingest + Query):
+  Postgres: 233.3377s
+  Elasticsearch: 330.4562s
+
+TPS Summary (Average across queries):
+  Postgres: 5063.20 TPS
+  Elasticsearch: 953.74 TPS
+

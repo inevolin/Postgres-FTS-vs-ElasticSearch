@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-runner
+  labels:
+    app: benchmark-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benchmark-runner
+  template:
+    metadata:
+      labels:
+        app: benchmark-runner
+    spec:
+      containers:
+      - name: benchmark-runner
+        image: benchmark-runner:latest
+        imagePullPolicy: Never
+        command:
+        - /bin/bash
+        - -c
+        - |
+          sleep infinity
+        ports:
+        - containerPort: 22
+          name: ssh
+        volumeMounts:
+        - name: benchmark-data
+          mountPath: /data
+          readOnly: true
+        - name: benchmark-scripts
+          mountPath: /scripts
+        - name: benchmark-config
+          mountPath: /config
+          readOnly: true
+        - name: benchmark-results
+          mountPath: /results
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "2"
+          limits:
+            memory: "4Gi"
+            cpu: "4"
+      volumes:
+      - name: benchmark-data
+        hostPath:
+          path: DATA_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-scripts
+        hostPath:
+          path: SCRIPT_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-config
+        hostPath:
+          path: CONFIG_PATH_PLACEHOLDER
+          type: Directory
+      - name: benchmark-results
+        hostPath:
+          path: RESULTS_PATH_PLACEHOLDER
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: benchmark-runner-service
+  labels:
+    app: benchmark-runner
+spec:
+  type: ClusterIP
+  ports:
+  - port: 22
+    targetPort: 22
+    protocol: TCP
+    name: ssh
+  selector:
+    app: benchmark-runner

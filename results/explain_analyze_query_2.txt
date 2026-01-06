@@ -1,0 +1,23 @@
+Query: WITH q AS (SELECT phraseto_tsquery('english', %s) AS query) SELECT id, title FROM documents, q WHERE documents.content_tsv @@ q.query ORDER BY ts_rank_cd(documents.content_tsv, q.query) DESC LIMIT %s;
+Params: ('project management', 10)
+
+EXPLAIN ANALYZE Output:
+Limit  (cost=75.17..75.19 rows=7 width=72) (actual time=0.460..0.461 rows=0.00 loops=1)
+  Buffers: shared hit=66
+  ->  Sort  (cost=75.17..75.19 rows=7 width=72) (actual time=0.460..0.460 rows=0.00 loops=1)
+        Sort Key: (ts_rank_cd(documents.content_tsv, '''project'' <-> ''manag'''::tsquery)) DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=66
+        ->  Bitmap Heap Scan on documents  (cost=47.10..75.07 rows=7 width=72) (actual time=0.457..0.458 rows=0.00 loops=1)
+              Recheck Cond: (content_tsv @@ '''project'' <-> ''manag'''::tsquery)
+              Rows Removed by Index Recheck: 11
+              Heap Blocks: exact=11
+              Buffers: shared hit=66
+              ->  Bitmap Index Scan on documents_fts_gin_idx  (cost=0.00..47.10 rows=7 width=0) (actual time=0.309..0.309 rows=11.00 loops=1)
+                    Index Cond: (content_tsv @@ '''project'' <-> ''manag'''::tsquery)
+                    Index Searches: 1
+                    Buffers: shared hit=14
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.084 ms
+Execution Time: 0.474 ms

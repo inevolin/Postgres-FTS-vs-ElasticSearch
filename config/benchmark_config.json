@@ -1,0 +1,84 @@
+{
+  "postgres": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "benchmark_db",
+    "user": "benchmark_user",
+    "password": "benchmark_password_123"
+  },
+  "elasticsearch": {
+    "host": "localhost",
+    "port": 9200,
+    "scheme": "http",
+    "index_name": "documents"
+  },
+  "benchmark": {
+    "concurrency": 100,
+    "transactions": 100
+  },
+  "data": {
+    "small_scale":  1000,
+    "medium_scale": 100000,
+    "large_scale":  1000000
+  },
+  "queries": {
+    "simple": {
+      "terms": [
+        "project", "development", "strategy", "analysis", "market", 
+        "customer", "revenue", "growth", "quarterly", "report", 
+        "meeting", "schedule", "budget", "forecast", "team", 
+        "leadership", "innovation", "technology", "software", "hardware",
+        "artichokes", "ganofs", "gasses", "incurrent", "demonizes", "sipage", "whaleback", "metasomasis"
+      ]
+    },
+    "phrase": {
+      "terms": [
+        "project management", "software development", "market analysis", 
+        "customer satisfaction", "revenue growth", "quarterly report", 
+        "budget forecast", "team leadership", "technological innovation", 
+        "strategic planning", "risk assessment", "data privacy", 
+        "cloud computing", "artificial intelligence", "machine learning",
+        "artichokes demonizes", "ganofs sipage", "gasses whaleback", "incurrent metasomasis"
+      ]
+    },
+    "complex": {
+      "term1s": [
+        "global", "annual", "strategic", "financial", "technical", 
+        "operational", "internal", "external", "corporate", "departmental",
+        "artichokes", "ganofs", "gasses", "incurrent", "demonizes", "sipage", "whaleback", "metasomasis"
+      ],
+      "term2s": [
+        "initiative", "review", "partnership", "performance", "specification", 
+        "efficiency", "communication", "policy", "governance", "compliance",
+        "restir", "skinker", "tribesmanship", "enscene", "slakiest", "caldron", "forerake", "penthouses"
+      ]
+    },
+    "top_n": {
+      "terms": [
+        "project", "market", "team", "global", "report",
+        "artichokes", "ganofs", "gasses", "incurrent", "demonizes"
+      ],
+      "n": 50
+    },
+    "boolean": {
+      "must_terms": ["strategy", "financial", "technical", "operational", "corporate"],
+      "should_terms": ["growth", "revenue", "efficiency", "performance", "innovation"],
+      "not_terms": ["risk", "failure", "loss", "decline", "error"]
+    }
+  },
+  "resources": {
+    "postgres": {
+      "cpu_request": "4",
+      "cpu_limit": "4",
+      "memory_request": "8Gi",
+      "memory_limit": "8Gi"
+    },
+    "elasticsearch": {
+      "cpu_request": "4",
+      "cpu_limit": "4",
+      "memory_request": "8Gi",
+      "memory_limit": "8Gi",
+      "jvm_opts": "-Xms4g -Xmx4g"
+    }
+  }
+}

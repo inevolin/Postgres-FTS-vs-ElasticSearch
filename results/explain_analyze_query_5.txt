@@ -1,0 +1,21 @@
+Query: WITH q AS (SELECT websearch_to_tsquery('english', %s) AS query) SELECT id, title FROM documents, q WHERE documents.content_tsv @@ q.query ORDER BY ts_rank_cd(documents.content_tsv, q.query) DESC LIMIT %s;
+Params: ('strategy growth -risk', 10)
+
+EXPLAIN ANALYZE Output:
+Limit  (cost=96.63..96.65 rows=7 width=72) (actual time=0.164..0.164 rows=0.00 loops=1)
+  Buffers: shared hit=11
+  ->  Sort  (cost=96.63..96.65 rows=7 width=72) (actual time=0.163..0.163 rows=0.00 loops=1)
+        Sort Key: (ts_rank_cd(documents.content_tsv, '''strategi'' & ''growth'' & !''risk'''::tsquery)) DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=11
+        ->  Bitmap Heap Scan on documents  (cost=68.57..96.54 rows=7 width=72) (actual time=0.160..0.160 rows=0.00 loops=1)
+              Recheck Cond: (content_tsv @@ '''strategi'' & ''growth'' & !''risk'''::tsquery)
+              Buffers: shared hit=11
+              ->  Bitmap Index Scan on documents_fts_gin_idx  (cost=0.00..68.56 rows=7 width=0) (actual time=0.150..0.150 rows=0.00 loops=1)
+                    Index Cond: (content_tsv @@ '''strategi'' & ''growth'' & !''risk'''::tsquery)
+                    Index Searches: 1
+                    Buffers: shared hit=11
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.118 ms
+Execution Time: 0.181 ms

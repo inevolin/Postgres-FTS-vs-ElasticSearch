@@ -1,0 +1,24 @@
+Query: WITH q AS (SELECT plainto_tsquery('english', %s) AS query) SELECT d.id, d.title, c.data FROM documents d JOIN child_documents c ON (c.data->>'parent_id')::uuid = d.id, q WHERE d.content_tsv @@ q.query LIMIT %s;
+Params: ('project', 10)
+
+EXPLAIN ANALYZE Output:
+Limit  (cost=40.21..183.45 rows=10 width=306) (actual time=0.621..0.991 rows=10.00 loops=1)
+  Buffers: shared hit=28 read=14
+  ->  Nested Loop  (cost=40.21..38715.57 rows=2700 width=306) (actual time=0.621..0.989 rows=10.00 loops=1)
+        Buffers: shared hit=28 read=14
+        ->  Bitmap Heap Scan on documents d  (cost=39.78..9793.29 rows=2702 width=68) (actual time=0.533..0.555 rows=6.00 loops=1)
+              Recheck Cond: (content_tsv @@ '''project'''::tsquery)
+              Heap Blocks: exact=6
+              Buffers: shared hit=14
+              ->  Bitmap Index Scan on documents_fts_gin_idx  (cost=0.00..39.10 rows=2702 width=0) (actual time=0.299..0.299 rows=2982.00 loops=1)
+                    Index Cond: (content_tsv @@ '''project'''::tsquery)
+                    Index Searches: 1
+                    Buffers: shared hit=7
+        ->  Index Scan using child_documents_parent_id_idx on child_documents c  (cost=0.42..10.68 rows=2 width=238) (actual time=0.058..0.071 rows=1.67 loops=6)
+              Index Cond: (((data ->> 'parent_id'::text))::uuid = d.id)
+              Index Searches: 6
+              Buffers: shared hit=14 read=14
+Planning:
+  Buffers: shared hit=173 read=6
+Planning Time: 0.543 ms
+Execution Time: 1.018 ms
