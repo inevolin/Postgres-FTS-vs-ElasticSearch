@@ -35,7 +35,7 @@ Summary text files:
 
 #### Headline workflow metrics
 
-| Scale | Startup (PG vs ES) | Load+Index (PG vs ES) | Total Query Duration (PG vs ES) | Total Workflow (PG vs ES) |
+| Scale (PG vs ES) | Startup | Load+Index | Total Query Duration | Total Workflow |
 | :--- | :--- | :--- | :--- | :--- |
 | small | 12.97s vs 13.03s | 0.34s vs 1.33s | 0.29s vs 4.12s | 13.60s vs 18.47s |
 | medium | 13.62s vs 13.99s | 17.97s vs 25.30s | 1.06s vs 4.93s | 32.64s vs 44.22s |
