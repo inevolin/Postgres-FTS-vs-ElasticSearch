@@ -4,11 +4,12 @@ This project benchmarks the full-text search performance of **PostgreSQL 18** (b
 
 ## 📊 Executive Summary
 
-Based on the latest benchmark runs, we observed distinct performance profiles for each system:
+Based on the latest committed benchmark artifacts in this repo (generated on **2026-01-06**), we observed distinct performance profiles for each system:
 
-*   **Large Datasets (1M parent + 1M child documents)**: Elasticsearch generally leads on average TPS for full-text queries, while Postgres FTS performance is workload- and tuning-dependent.
-*   **JOIN Workload (Query 6)**: Postgres uses a SQL join against `child_documents`; Elasticsearch uses a `join` field with `has_child`.
-*   **Ingest & Indexing**: Postgres ingestion/indexing costs include writing table heap plus the GIN index.
+*   **Small + Medium scales**: Postgres is faster than Elasticsearch across all 6 query types in this workload.
+*   **Large scale (1M parents + 1M children)**: Elasticsearch is faster on the ranked “top-K over many matches” searches (Query 1, 3, 4), while Postgres is faster on Phrase/Boolean and especially the JOIN workload (Query 2, 5, 6).
+*   **Why Postgres can underperform**: queries that do `ORDER BY ts_rank_cd(...) DESC LIMIT K` must score and consider *all* matching rows on the Postgres side, which becomes expensive for frequent terms / OR queries at scale.
+*   **JOIN Workload (Query 6)**: Postgres uses a relational join against `child_documents`; Elasticsearch uses a `join` field with `has_child` + `inner_hits`.
 
 **Dataset sizing note**: This benchmark generates **one child document per parent document** at each scale (1:1). Concretely: `small` = 1,000 parents + 1,000 children; `medium` = 100,000 + 100,000; `large` = 1,000,000 + 1,000,000.
 
@@ -16,67 +17,63 @@ Based on the latest benchmark runs, we observed distinct performance profiles fo
 
 For a query-by-query explanation of how Elasticsearch vs Postgres behaves (and where semantics differ), see [QUERY_BREAKDOWN.md](QUERY_BREAKDOWN.md).
 
-### 1. Large Dataset Performance (1M Parent + 1M Child Documents) & Concurrency Analysis
+### Latest Results (as committed) — Concurrency=10, Transactions=1000
 
-For the large dataset, we tested performance across multiple concurrency levels (1, 10, and 50 clients) to understand how each system scales under load.
+These artifacts were generated via:
 
-#### Performance Comparison by Concurrency
+```bash
+./run_tests.sh -s small  -c 10 -t 1000
+./run_tests.sh -s medium -c 10 -t 1000
+./run_tests.sh -s large  -c 10 -t 1000
+```
 
-*Note: These results are based on 1,000 transactions per query type (Query 1–6).*
+Summary text files:
 
-| Metrics (Postgres vs ES) | 1 Client | 10 Clients | 50 Clients |
-| :--- | :--- | :--- | :--- |
-| **Avg TPS (across Query 1–6)** | 151 vs **360** | 184 vs **795** | 444 vs **837** |
-| **Startup Time** | 17s vs **13s** | 15s vs **13s** | **14s** vs 18s |
-| **Load + Index Time** | **136s** vs 352s | **141s** vs 345s | **123s** vs 380s |
+* `plots/small_10_1000_performance_summary.txt`
+* `plots/medium_10_1000_performance_summary.txt`
+* `plots/large_10_1000_performance_summary.txt`
 
-#### Key Findings
+#### Headline workflow metrics
 
-*   **Load + Index**: Postgres load+index includes heap + GIN index creation.
-*   **Throughput (Avg TPS across Query 1–6)**: Elasticsearch typically leads at lower concurrency; Postgres results vary by workload and tuning.
-*   **JOIN Query (Query 6)**: JOIN performance differs from pure search queries; see the per-query breakdown in the summary files.
+| Scale | Startup (PG vs ES) | Load+Index (PG vs ES) | Total Query Duration (PG vs ES) | Total Workflow (PG vs ES) |
+| :--- | :--- | :--- | :--- | :--- |
+| small | 12.97s vs 13.03s | 0.34s vs 1.33s | 0.29s vs 4.12s | 13.60s vs 18.47s |
+| medium | 13.62s vs 13.99s | 17.97s vs 25.30s | 1.06s vs 4.93s | 32.64s vs 44.22s |
+| large | 13.47s vs 12.80s | 206.67s vs 309.22s | 13.20s vs 8.44s | 233.34s vs 330.46s |
+
+Notes:
+
+* The large-scale **query phase** is faster on Elasticsearch overall in this run, because Query 1/3/4 dominate query time.
+* The large-scale **total workflow** is still faster on Postgres here, primarily due to faster load+index for this schema + configuration.
 
 #### Visualizations
 
-*(See "Workload" section for details on Query 1–6)*
+![Small (10 clients)](plots/small_10_1000_combined_summary.png)
 
-**1 Client Summary**
-![1 Client Summary](plots/large_1_1000_combined_summary.png)
+![Medium (10 clients)](plots/medium_10_1000_combined_summary.png)
 
----
+![Large (10 clients)](plots/large_10_1000_combined_summary.png)
 
-**10 Clients Summary**
-![10 Clients Summary](plots/large_10_1000_combined_summary.png)
+#### Where Postgres underperforms (large scale)
 
----
+In the large run, Postgres is slower than Elasticsearch on:
 
-**50 Clients Summary**
-![50 Clients Summary](plots/large_50_1000_combined_summary.png)
+* **Query 1 (Simple)**: 0.0234s vs 0.0108s
+* **Query 3 (Complex OR)**: 0.0704s vs 0.0104s
+* **Query 4 (Top-N)**: 0.0254s vs 0.0117s
 
----
+These are the queries that do ranked top-K retrieval. On Postgres the benchmark uses:
 
-**50 Clients Summary (Elasticsearch 9.0)**
+```sql
+ORDER BY ts_rank_cd(documents.content_tsv, q.query) DESC
+LIMIT K;
+```
 
-This run corresponds to `large_50_1002` and was generated with Elasticsearch 9.0. The baseline `large_50_1000` run uses Elasticsearch 8.x.
+That forces ranking work over the entire candidate set, which grows quickly for frequent terms and disjunctions at scale. See the saved plans:
 
-**Observations (Elasticsearch 8 → 9)**
-*   **Change is workload-dependent**: Query 5 improves materially (+21%).
-*   **Most other queries are within ±10%** in this pair of runs.
-*   **Resource utilization**: memory tail/peak is lower (p95 -10%, max -10%), while CPU max spikes are higher (+11%).
-
-![50 Clients Summary (Elasticsearch 9.0)](plots/large_50_1002_combined_summary.png)
-
----
-
-**50 Clients Summary (Elasticsearch 8 with hits tracking disabled)**
-
-This run corresponds to `large_50_1001` and was generated with Elasticsearch hits tracking disabled (`track_total_hits: false`). The baseline `large_50_1000` run uses hits tracking enabled (the default behavior / `track_total_hits: true`).
-
-**Observations (hits tracking enabled → disabled)**
-*   **Largest wins are in higher-overhead searches**: Query 3 and Query 4 see the biggest gains (+21% and +16%).
-*   **JOIN also improves, but modestly**: Query 6 improves (+10%), suggesting hits tracking isn’t the dominant cost driver there.
-
-![50 Clients Summary (hits tracking disabled)](plots/large_50_1001_combined_summary.png)
+* `results/explain_analyze_query_1.txt`
+* `results/explain_analyze_query_3.txt`
+* `results/explain_analyze_query_4.txt`
 
 
 ## 🔬 Methodology
@@ -89,7 +86,7 @@ The benchmarks were conducted using a containerized environment to ensure isolat
     *   Docker: 29.1.3
     *   Kubernetes Client: v1.34.1
     *   Python: 3.10.15
-    *   Elasticsearch: 8.11.0 (and 9.0.0)
+    *   Elasticsearch: 8.11.0
     *   PostgreSQL: 18
 *   **Resources**: Both systems were restricted to identical CPU and Memory limits (4 CPU, 8GB RAM, configurable in `config/benchmark_config.json`) to ensure a fair fight.
 *   **Data Storage Differences**: 
@@ -102,12 +99,12 @@ The benchmarks were conducted using a containerized environment to ensure isolat
         1.  **Query 1 (Simple Search)**: Single-term full-text search (e.g., "strategy", "innovation"). Tests basic inverted index lookup speed.
         2.  **Query 2 (Phrase Search)**: Exact phrase matching (e.g., "project management"). Tests position-aware index performance.
         3.  **Query 3 (Complex Query)**: Two-term *OR* query (Postgres uses a tsquery `term1 OR term2`; Elasticsearch uses a `bool.should`). Tests disjunction performance.
-        4.  **Query 4 (Top-N Query)**: Single-term search with a limit on results (N=50). Tests ranking and retrieval optimization for paginated views.
+        4.  **Query 4 (Top-N Query)**: Single-term search with a higher result limit (**N=50 results** by default). Tests ranking and retrieval optimization for paginated views.
         5.  **Query 5 (Boolean Query)**: A three-clause boolean query over `content` with positive and negative terms. (Implementation note: this benchmark treats the “must” and “should” terms as required on the Postgres side; Elasticsearch uses `must`/`should`/`must_not`.)
         6.  **Query 6 (JOIN Query)**: Join parents to children.
             *   **PostgreSQL**: `documents` JOIN `child_documents` on `child_documents.parent_id = documents.id`, filtered by a full-text predicate on the parent.
             *   **Elasticsearch**: Parent/child join using a `join_field` mapping and `has_child` query (includes `inner_hits`).
-    *   **Concurrency**: Tests are run at a configurable concurrency (e.g., 1, 10, 50) to evaluate scalability.
+    *   **Concurrency**: The benchmark supports configurable concurrency. The committed results in this repo were run with **10 concurrent clients**.
 
 ### Data Model / Schema (UML ASCII)
 
@@ -197,10 +194,10 @@ To run these benchmarks yourself and verify the results:
     # Run Large scale benchmark using defaults from config/benchmark_config.json
     ./run_tests.sh -s large
 
-    # Reproduce the committed large runs (1k transactions/query)
-    ./run_tests.sh -s large -c 1  -t 1000
-    ./run_tests.sh -s large -c 10 -t 1000
-    ./run_tests.sh -s large -c 50 -t 1000
+    # Reproduce the committed runs (1k transactions/query, 10 clients)
+    ./run_tests.sh -s small  -c 10 -t 1000
+    ./run_tests.sh -s medium -c 10 -t 1000
+    ./run_tests.sh -s large  -c 10 -t 1000
     ```
 4.  **View Results**:
     *   Summaries and plots are generated in the `plots/` directory.
@@ -225,7 +222,7 @@ The `run_tests.sh` script supports several flags to customize the benchmark run:
 
 ```bash
 # Run with custom concurrency and transaction count
-./run_tests.sh -s medium -c 50 -t 500
+./run_tests.sh -s medium -c 10 -t 500
 
 # Benchmark only Postgres with specific resource limits
 ./run_tests.sh -d postgres --cpu 2 --mem 4Gi
@@ -264,8 +261,8 @@ The benchmark runner and plot generator use a scale+concurrency+transactions nam
 
 The committed example artifacts include:
 
-*   `results/large_1_1000_*`, `results/large_10_1000_*`, `results/large_50_1000_*`
-*   `plots/large_1_1000_*`, `plots/large_10_1000_*`, `plots/large_50_1000_*`, `plots/large_50_1001_*`
+*   `results/small_10_1000_*`, `results/medium_10_1000_*`, `results/large_10_1000_*`
+*   `plots/small_10_1000_*`, `plots/medium_10_1000_*`, `plots/large_10_1000_*`
 
 ## ⚠️ Limitations & Future Work
 

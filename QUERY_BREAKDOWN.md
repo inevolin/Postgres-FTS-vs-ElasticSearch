@@ -124,7 +124,7 @@ Mix required terms and prohibited terms.
 Uses `bool.must`, `bool.should`, and `bool.must_not`.
 
 ### PostgreSQL (as benchmarked)
-This repo currently makes both the “must” and “should” terms required on the Postgres side (and excludes `not`):
+This repo currently makes both the “must” and “should” terms required on the Postgres side, and also includes a negative term using the `-term` syntax supported by `websearch_to_tsquery`:
 
 ```sql
 WITH q AS (SELECT websearch_to_tsquery('english', $1) AS query)
@@ -137,7 +137,27 @@ LIMIT 10;
 
 Where `$1` is a string like `"strategy growth -risk"`.
 
-Note: Elasticsearch `should` clauses are often optional unless `minimum_should_match` is set, so this query can still differ in semantics.
+Note: Elasticsearch `should` clauses are often optional unless `minimum_should_match` is set, so this query can still differ in semantics (and also differ in selectivity/cost).
+
+---
+
+## Interpreting current results (as of 2026-01-06)
+
+In the committed `*_10_1000` runs, Postgres underperforms on the large dataset specifically for the ranked top-K style queries (Query 1, 3, and 4). The common Postgres pattern for those queries is:
+
+```sql
+WHERE documents.content_tsv @@ q.query
+ORDER BY ts_rank_cd(documents.content_tsv, q.query) DESC
+LIMIT K;
+```
+
+With frequent terms / OR queries, the GIN index can return a large candidate set, and Postgres must compute `ts_rank_cd(...)` and keep a top-K heap across those candidates. Elasticsearch/Lucene can often short-circuit scoring non-competitive documents for top-K retrieval.
+
+For Postgres-side investigation, see the saved plans:
+
+- `results/explain_analyze_query_1.txt`
+- `results/explain_analyze_query_3.txt`
+- `results/explain_analyze_query_4.txt`
 
 ---
 
